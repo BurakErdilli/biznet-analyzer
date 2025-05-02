@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Dep
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.background import BackgroundTasks # Import BackgroundTasks
 from typing import Dict, List, Optional, Any, Union
 import uvicorn
 import os
@@ -14,34 +15,38 @@ import shutil # For secure file saving
 
 # Assuming 'app' directory is in the python path or use relative import if running as module
 try:
+    # Adjusted imports assuming standard structure
     from app.network_model import BusinessNetwork
     import app.logic as logic
 except ImportError:
      # Fallback for running main.py directly from project root for development
     from network_model import BusinessNetwork
-    import logic
+    import logic # type: ignore
 
 app = FastAPI(
     title="Business Network Analyzer API",
-    description="API for managing and visualizing a business network.",
-    version="1.0.0"
+    description="API for managing and visualizing a business network using Cytoscape.js.",
+    version="1.1.0" # Updated version
 )
 
-# Determine base directory and setup paths
-# Correctly determine project root assuming main.py is inside 'app' or at root level
-if os.path.basename(os.path.dirname(__file__)) == 'app':
-     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-else:
+# --- Determine Directories ---
+# Correctly determine project root assuming standard structure or direct run
+if __name__ == "__main__" and __package__ is None:
+     # Running main.py directly from project root
      project_root = os.path.dirname(os.path.abspath(__file__))
+else:
+     # Running as part of a package (e.g., via uvicorn main:app)
+     # Assumes main.py is inside 'app' which is inside the project root
+     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 static_dir = os.path.join(project_root, "static")
 templates_dir = os.path.join(project_root, "templates")
-data_dir = os.path.join(project_root, "data")
+data_dir = os.path.join(project_root, "data") # Used for import/export path construction
 
 # Ensure directories exist
 os.makedirs(static_dir, exist_ok=True)
 os.makedirs(templates_dir, exist_ok=True)
-os.makedirs(data_dir, exist_ok=True)
+os.makedirs(data_dir, exist_ok=True) # Ensure data dir exists
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -52,20 +57,16 @@ templates = Jinja2Templates(directory=templates_dir)
 # --- Global Error Handler ---
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    # Log the exception for debugging
     error_msg = f"Unhandled exception during request to {request.url}:\n{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
-    print(error_msg) # Log to console/server logs
-
-    # Return a user-friendly JSON error message
+    print(error_msg)
     return JSONResponse(
         status_code=500,
-        content={"detail": f"An internal server error occurred: {str(exc)}"}
+        content={"detail": f"An internal server error occurred."} # Keep internal details private
     )
 
 # --- Frontend Route ---
-@app.get("/", include_in_schema=False) # Hide from API docs
+@app.get("/", include_in_schema=False)
 def home(request: Request):
-    """Serves the main HTML page."""
     return templates.TemplateResponse("index.html", {"request": request})
 
 # --- API Routes ---
@@ -73,132 +74,104 @@ def home(request: Request):
 def api_get_network():
     """Retrieve the current state of the entire business network."""
     try:
+        # Logic module handles potential initialization errors
         result = logic.get_network()
         return result
     except Exception as e:
-        # This endpoint is critical, so let the global handler manage unexpected errors
-        print(f"Error getting network data: {e}") # Log specific context
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve network data: {str(e)}")
+        print(f"Error getting network data: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve network data.")
 
-@app.post("/api/nodes", status_code=201, tags=["Nodes"]) # Use 201 Created for successful POST
+@app.post("/api/nodes", status_code=201, tags=["Nodes"])
 def api_add_node(data: Dict[str, Any]):
-    """Add a new node to the network. Requires 'parent_id' if network is not empty. Optional 'id' can be provided."""
+    """Add a new node. Requires 'parent_id' if network isn't empty. Optional 'id'."""
     result = logic.add_node(data)
     if "error" in result:
-        raise HTTPException(
-            status_code=400, # Bad Request for validation errors
-            detail=result["error"]
-        )
+        # Use 400 for validation/user errors, 500 if it was unexpected internal
+        status_code = 400 if "invalid" in result["error"].lower() or "required" in result["error"].lower() or "exist" in result["error"].lower() else 500
+        raise HTTPException(status_code=status_code, detail=result["error"])
     return result # Returns {"status": "success", "id": new_node_id}
 
-# This endpoint seems redundant if the logic is identical to POST /api/nodes.
-# Kept for compatibility with existing JS, but consider merging or clarifying purpose.
+# Keeping this alias as frontend might use it, logic is identical to POST /api/nodes
 @app.post("/api/nodes/near", status_code=201, tags=["Nodes"])
 def api_add_node_near(data: Dict[str, Any]):
-    """(Alias for Add Node) Add a new node, typically used by context menu 'add nearby'."""
+    """(Alias for Add Node) Add a new node."""
     result = logic.add_node(data)
     if "error" in result:
-        raise HTTPException(
-            status_code=400,
-            detail=result["error"]
-        )
+        status_code = 400 if "invalid" in result["error"].lower() or "required" in result["error"].lower() or "exist" in result["error"].lower() else 500
+        raise HTTPException(status_code=status_code, detail=result["error"])
     return result
 
-@app.delete("/api/nodes/{node_id}", status_code=200, tags=["Nodes"]) # Use 200 OK or 204 No Content
+@app.delete("/api/nodes/{node_id}", status_code=200, tags=["Nodes"])
 def api_delete_node(node_id: str):
-    """Delete a node from the network. Fails if the node has children."""
+    """Delete a leaf node. Fails if the node has children or doesn't exist."""
     result = logic.remove_node(node_id)
     if "error" in result:
-        if "not found" in result["error"].lower():
-            raise HTTPException(
-                status_code=404, # Not Found
-                detail=result["error"]
-            )
-        elif "Cannot remove node with children" in result["error"]:
-             raise HTTPException(
-                status_code=409, # Conflict - cannot delete due to state
-                detail=result["error"]
-            )
+        error_detail = result["error"].lower()
+        if "not found" in error_detail:
+            raise HTTPException(status_code=404, detail=result["error"])
+        elif "cannot remove node with children" in error_detail:
+             raise HTTPException(status_code=409, detail=result["error"]) # Conflict
         else:
-             raise HTTPException(
-                 status_code=400, # Bad Request for other validation errors
-                 detail=result["error"]
-             )
-    # Return success status, maybe 204 No Content is better if no body needed
+             raise HTTPException(status_code=400, detail=result["error"]) # Other validation errors
     return result # Returns {"status": "success"}
 
-# This endpoint might be redundant if the main /api/network provides all necessary node details.
-# Kept for potential direct access or future expansion.
 @app.get("/api/nodes/{node_id}/insight", tags=["Nodes"])
 def api_node_insight(node_id: str):
-    """Get detailed calculated insights and properties for a specific node."""
+    """Get detailed insights for a specific node."""
     result = logic.get_node_insight(node_id)
     if "error" in result:
         if "not found" in result["error"].lower():
-            raise HTTPException(
-                status_code=404,
-                detail=result["error"]
-            )
+            raise HTTPException(status_code=404, detail=result["error"])
         else:
-            raise HTTPException(
-                status_code=400,
-                detail=result["error"]
-            )
+            # Could be 500 if it's an unexpected insight calculation error
+            raise HTTPException(status_code=400, detail=result["error"])
     return result
 
 @app.get("/api/suggestions", tags=["Analysis"])
 def api_get_suggestions(limit: int = 5):
-    """Get suggested nodes to add children to, based on network balance metrics."""
+    """Get suggested nodes to add children to."""
     if limit < 1:
         raise HTTPException(status_code=400, detail="Limit must be at least 1")
     try:
-        # Logic function now handles internal errors gracefully
+        # Logic function handles internal errors gracefully
         return logic.get_suggestions(limit)
     except Exception as e:
-        # Log unexpected errors in this specific endpoint
-        print(f"Error getting suggestions: {e}\n{traceback.format_exc()}")
-        # Return empty suggestions as per requirement, but maybe signal error differently?
-        # Consider returning 500 if the error isn't handled by logic.get_suggestions
-        return {"suggestions": []}
+        print(f"Unexpected error getting suggestions: {e}\n{traceback.format_exc()}")
+        # Return 500 for unexpected errors in this endpoint
+        raise HTTPException(status_code=500, detail="Failed to retrieve suggestions.")
 
 
 @app.post("/api/settings", tags=["Settings"])
 def api_update_settings(data: Dict[str, Any]):
-    """Update network analysis settings like 'min_children_threshold' or 'balance_factor'."""
+    """Update network analysis settings."""
     result = logic.update_settings(data)
     if "error" in result:
-        raise HTTPException(
-            status_code=400,
-            detail=result["error"]
-        )
+        raise HTTPException(status_code=400, detail=result["error"])
     return result # Returns {"status": "success"}
 
 @app.post("/api/import", tags=["Import/Export"])
 async def import_network(file: UploadFile = File(..., description="A JSON file representing the network structure.")):
-    """Import a network structure from an uploaded JSON file, replacing the current network."""
+    """Import network from JSON, replacing the current one."""
     if file.content_type != "application/json":
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a JSON file.")
 
-    # Define the path for the new network file
+    # Define the target path using the standard filename in the data directory
+    # logic.NETWORK_FILENAME provides the standard name "network.json"
     import_filepath = os.path.join(data_dir, logic.NETWORK_FILENAME)
     temp_filepath = import_filepath + ".tmp" # Temporary file for safe writing
 
     try:
-        # Read file content async
         contents = await file.read()
 
-        # Validate JSON structure before replacing anything
+        # Validate content by attempting to load it into a temporary BusinessNetwork instance
         try:
-            network_data = json.loads(contents)
-            # Basic validation (presence of 'nodes' and 'graph' keys)
-            if not isinstance(network_data.get("nodes"), dict) or not isinstance(network_data.get("graph"), dict):
-                 raise ValueError("Invalid JSON structure: Missing 'nodes' or 'graph'.")
-            # Try creating a temporary network instance to fully validate structure and data
-            BusinessNetwork.from_json(contents)
-        except (json.JSONDecodeError, ValueError, Exception) as json_err:
-            raise HTTPException(status_code=400, detail=f"Invalid JSON file content: {str(json_err)}")
+            # BusinessNetwork.from_json performs robust validation now
+            temp_network = BusinessNetwork.from_json(contents)
+            # Optionally add more checks on temp_network if needed
+        except (json.JSONDecodeError, ValueError, Exception) as validation_err:
+            raise HTTPException(status_code=400, detail=f"Invalid network file content: {str(validation_err)}")
 
-        # Save content to temporary file securely
+        # Save validated content to temporary file securely
         with open(temp_filepath, "wb") as f:
             f.write(contents)
 
@@ -209,59 +182,81 @@ async def import_network(file: UploadFile = File(..., description="A JSON file r
         if logic.reload_network_from_file(import_filepath):
              return {"success": True, "message": "Network imported successfully."}
         else:
-             # This case indicates an error during reload AFTER successful file save/move
-             raise HTTPException(status_code=500, detail="Network file saved but failed to reload.")
+             # This indicates an error during reload AFTER successful file save/move
+             raise HTTPException(status_code=500, detail="Network file saved but failed to reload into application.")
 
     except HTTPException:
         raise # Re-raise HTTP exceptions directly
     except Exception as e:
         print(f"Error importing network: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred during import: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred during import.")
     finally:
-        # Clean up temp file if it exists (e.g., if move failed)
+        # Clean up temp file if it exists
         if os.path.exists(temp_filepath):
-            os.remove(temp_filepath)
-        await file.close()
+            try:
+                os.remove(temp_filepath)
+            except OSError as rm_err:
+                print(f"Error removing temporary import file {temp_filepath}: {rm_err}")
+        if file: # Ensure file is closed even if errors occurred before await file.close()
+            await file.close()
 
 
+# --- Helper function for cleaning up export file ---
+def remove_file(path: str) -> None:
+    try:
+        os.remove(path)
+        print(f"Cleaned up temporary export file: {path}")
+    except OSError as e:
+        print(f"Error removing temporary export file {path}: {e}")
+
+# --- Export Endpoint ---
 @app.get("/api/export", tags=["Import/Export"])
-def export_network():
+def export_network(background_tasks: BackgroundTasks): # Inject BackgroundTasks
     """Export the current network structure as a JSON file."""
     try:
         # Define export filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         export_filename = f"network_export_{timestamp}.json"
-        temp_export_path = os.path.join(data_dir, export_filename) # Temporary path
+        # Create temp file in the data directory (accessible location)
+        temp_export_path = os.path.join(data_dir, export_filename)
 
-        # Get current network data
+        # Get current network data from logic module
         network_data = logic.get_network()
 
         # Save network data to the export file
         with open(temp_export_path, 'w') as f:
             json.dump(network_data, f, indent=2)
 
+        # Add background task to remove the file after response is sent
+        background_tasks.add_task(remove_file, temp_export_path)
+
         # Return the file for download
         return FileResponse(
             path=temp_export_path,
             filename=export_filename, # Suggest filename to browser
-            media_type="application/json",
-            # Cleanup: FastAPI doesn't automatically delete the temp file after sending.
-            # A background task could be used, or rely on OS temp cleaning.
-            # For simplicity here, we leave the file temporarily.
-            # background=BackgroundTask(os.remove, temp_export_path) # Requires importing BackgroundTask
+            media_type="application/json"
         )
     except Exception as e:
         print(f"Error exporting network: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Error exporting network: {str(e)}")
+        # Clean up temp file if error occurs before returning response
+        if 'temp_export_path' in locals() and os.path.exists(temp_export_path):
+             remove_file(temp_export_path) # Attempt cleanup immediately
+        raise HTTPException(status_code=500, detail="Error exporting network.")
 
 # --- Run Server ---
 if __name__ == "__main__":
-    # Determine host and port from environment variables or use defaults
-    host = os.environ.get("HOST", "0.0.0.0")
+    host = os.environ.get("HOST", "127.0.0.1") # Default to 127.0.0.1 for local dev
     port = int(os.environ.get("PORT", "8000"))
-    reload_flag = bool(os.environ.get("RELOAD", True)) # Enable reload by default for dev
+    # Disable reload by default unless explicitly set, as it can interfere with some setups
+    reload_flag_str = os.environ.get("RELOAD", "false").lower()
+    reload_flag = reload_flag_str in ["true", "1", "yes"]
 
-    print(f"Starting server on {host}:{port} with reload={'enabled' if reload_flag else 'disabled'}")
+    # Check if logic.network exists before starting (initial load)
+    if logic.network is None:
+         print("FATAL: Network object failed to initialize on startup. Check logs.")
+         # sys.exit(1) # Or handle more gracefully
+
+    print(f"Starting server on http://{host}:{port} with reload={'enabled' if reload_flag else 'disabled'}")
     uvicorn.run("main:app", host=host, port=port, reload=reload_flag)
 
 # --- END OF FILE main.py ---
