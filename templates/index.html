@@ -1,0 +1,423 @@
+<!-- START OF FILE index.html -->
+
+<!DOCTYPE html>
+<html lang="en" class="light"> <!-- Default to light theme -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Network Analyzer</title>
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" rel="stylesheet"> <!-- Using newer version -->
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Theme Variables */
+        :root {
+            --bg-primary: #f7fafc; /* gray-100 */
+            --bg-secondary: #ffffff; /* white */
+            --text-primary: #1a202c; /* gray-900 */
+            --text-secondary: #4a5568; /* gray-600 */
+            --border-color: #e2e8f0; /* gray-300 */
+            --highlight: #3182ce; /* blue-600 */
+            --danger: #e53e3e; /* red-600 */
+            --warning: #dd6b20; /* orange-600 */
+            --success: #38a169; /* green-600 */
+        }
+
+        .dark {
+            --bg-primary: #1a202c; /* gray-900 */
+            --bg-secondary: #2d3748; /* gray-800 */
+            --text-primary: #f7fafc; /* gray-100 */
+            --text-secondary: #a0aec0; /* gray-400 */
+            --border-color: #4a5568; /* gray-600 */
+            --highlight: #4299e1; /* blue-400 */
+            --danger: #fc8181; /* red-400 */
+            --warning: #f6ad55; /* orange-400 */
+            --success: #68d391; /* green-400 */
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.2s ease-out, color 0.2s ease-out;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+        }
+
+        /* Utility theme classes */
+        .theme-bg-primary { background-color: var(--bg-primary); }
+        .theme-bg-secondary { background-color: var(--bg-secondary); }
+        .theme-text-primary { color: var(--text-primary); }
+        .theme-text-secondary { color: var(--text-secondary); }
+        .theme-border { border-color: var(--border-color); }
+        .theme-highlight { color: var(--highlight); }
+        .theme-danger { color: var(--danger); }
+        .theme-warning { color: var(--warning); }
+        .theme-success { color: var(--success); }
+
+        /* SVG Node styles */
+        .node-group { cursor: pointer; }
+        .node-circle {
+            transition: r 0.2s ease, fill 0.2s ease, stroke 0.2s ease, stroke-width 0.1s ease;
+            stroke: var(--border-color);
+             stroke-width: 1px;
+        }
+        .node-circle:hover {
+            stroke: var(--highlight);
+            stroke-width: 2.5px;
+        }
+        .node-group:hover .node-label { /* Slightly bolder label on hover */
+             /* font-weight: 600; */ /* Optional: make label bold on hover */
+        }
+
+        /* SVG Link styles */
+        .link {
+            transition: stroke 0.2s ease, stroke-width 0.2s ease;
+            stroke: var(--border-color);
+            stroke-opacity: 0.6;
+            fill: none;
+            stroke-width: 1.5px;
+        }
+        .link:hover {
+            stroke-opacity: 1;
+             stroke-width: 2px;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            padding: 8px 12px;
+            background: rgba(40, 40, 40, 0.9); /* Darker background */
+            color: #f0f0f0; /* Lighter text */
+            border-radius: 4px;
+            font-size: 0.8rem; /* Smaller font */
+            line-height: 1.4;
+            pointer-events: none;
+            z-index: 10;
+            display: none; /* Initially hidden */
+            max-width: 260px;
+             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+             white-space: normal; /* Allow wrapping */
+             opacity: 0; /* Start hidden for transition */
+             transition: opacity 0.1s ease-in-out;
+        }
+        .tooltip.visible {
+             opacity: 1;
+        }
+
+        /* Context menu */
+        .context-menu {
+            position: absolute;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            display: none; /* Initially hidden */
+            color: var(--text-primary);
+            min-width: 160px; /* Minimum width */
+        }
+        .context-menu-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.1s ease;
+            display: flex; /* Align icon and text */
+            align-items: center;
+        }
+        .context-menu-item i { /* Icon styling */
+             margin-right: 8px;
+             width: 1em; /* Fixed width for alignment */
+             text-align: center;
+             opacity: 0.7;
+        }
+        .context-menu-item:hover {
+            background-color: var(--border-color); /* Use border color for hover */
+        }
+        .context-menu-item[disabled] {
+             color: var(--text-secondary);
+             cursor: not-allowed;
+             opacity: 0.6;
+             background-color: transparent; /* No hover effect when disabled */
+        }
+         .context-menu-separator {
+             height: 1px;
+             background-color: var(--border-color);
+             margin: 4px 0;
+         }
+
+        /* Legends */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px; /* Slightly more spacing */
+             font-size: 0.8rem;
+        }
+        .color-square {
+            width: 12px;
+            height: 12px;
+            margin-right: 6px;
+            border-radius: 3px; /* Slightly rounded square */
+             border: 1px solid rgba(0,0,0,0.1); /* Subtle border */
+        }
+        .legend-section {
+             margin-bottom: 10px;
+        }
+         .legend-title {
+             font-weight: 600;
+             margin-bottom: 4px;
+             font-size: 0.85rem;
+         }
+
+        /* Suggestions Panel */
+        .suggestion-item {
+            transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+        }
+        .suggestion-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Modal Styling */
+        #addNodeModal { transition: opacity 0.2s ease-in-out; }
+        #addNodeModal.hidden { pointer-events: none; opacity: 0; }
+
+         /* Focus ring styles */
+         input:focus, button:focus {
+             outline: none;
+             box-shadow: 0 0 0 2px var(--highlight);
+             border-color: var(--highlight) !important; /* Override default border */
+         }
+         /* Adjust focus for dark mode */
+         .dark input:focus, .dark button:focus {
+              box-shadow: 0 0 0 2px var(--highlight);
+         }
+
+    </style>
+</head>
+<body class="theme-bg-primary theme-text-primary min-h-screen text-sm sm:text-base"> <!-- Base font size -->
+    <div class="container mx-auto px-4 py-6">
+        <header class="mb-6 flex flex-wrap justify-between items-center gap-y-4"> <!-- Flex wrap for smaller screens -->
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold theme-text-primary">Business Network Analyzer</h1>
+                <p class="text-sm sm:text-base theme-text-secondary">Visualize and analyze network structure and metrics</p>
+            </div>
+            <div class="flex space-x-2 sm:space-x-4">
+                <button id="layoutToggle" class="px-3 py-1.5 text-sm rounded-md bg-indigo-500 hover:bg-indigo-600 text-white transition duration-150 flex items-center shadow">
+                    <i class="fas fa-arrow-right mr-2"></i> <!-- Default to Horizontal Icon -->
+                    <span id="layoutToggleText">Horizontal Layout</span>
+                </button>
+                <button id="themeToggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <!-- Icons will be toggled by JS -->
+                    <i class="fas fa-moon w-4 h-4 theme-text-secondary"></i>
+                    <i class="fas fa-sun w-4 h-4 theme-text-secondary hidden"></i>
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-12 gap-6">
+            <!-- === Sidebar Controls === -->
+            <div class="col-span-12 lg:col-span-3 space-y-6">
+
+                <!-- Add Node Form -->
+                <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                    <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary">
+                        <i class="fas fa-plus-circle mr-2 theme-highlight"></i> Add Node
+                    </h2>
+                    <form id="addNodeForm" class="space-y-3">
+                        <div>
+                            <label for="addNodeId" class="block text-xs font-medium theme-text-secondary mb-1">Node Name (Optional)</label>
+                            <input type="text" id="addNodeId" name="id" placeholder="Auto-generated if empty" class="mt-1 block w-full text-sm rounded-md border theme-border theme-bg-primary theme-text-primary focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label for="addNodeParentId" class="block text-xs font-medium theme-text-secondary mb-1">Parent ID</label>
+                            <input type="text" id="addNodeParentId" name="parent_id" placeholder="Required if network exists" class="mt-1 block w-full text-sm rounded-md border theme-border theme-bg-primary theme-text-primary focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow">
+                            <i class="fas fa-plus mr-2"></i> Add Node
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Suggestions Panel -->
+                <div id="suggestionsPanel" class="theme-bg-secondary p-4 rounded-lg shadow border theme-border hidden">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-lg font-semibold flex items-center theme-text-primary">
+                            <i class="fas fa-lightbulb mr-2 text-yellow-500"></i> Suggestions
+                        </h2>
+                        <button id="refreshSuggestions" class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xs theme-text-secondary" title="Refresh Suggestions">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs mb-3 theme-text-secondary">Nodes needing children for better balance:</p>
+                    <div id="suggestionsList" class="max-h-60 overflow-y-auto space-y-2 pr-1">
+                        <!-- Suggestion items will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Network Settings -->
+                <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                    <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary">
+                        <i class="fas fa-sliders-h mr-2 theme-highlight"></i> Network Settings
+                    </h2>
+                    <form id="settingsForm" class="space-y-4">
+                        <div>
+                            <label for="minChildrenThreshold" class="block text-xs font-medium theme-text-secondary mb-1">Min Children Threshold</label>
+                            <input type="number" id="minChildrenThreshold" min="1" value="2" class="mt-1 block w-full text-sm rounded-md border theme-border theme-bg-primary theme-text-primary focus:ring-indigo-500 focus:border-indigo-500">
+                            <p class="text-xs mt-1 theme-text-secondary">Nodes below this are 'chokepoints'.</p>
+                        </div>
+                        <div>
+                            <label for="balanceFactor" class="block text-xs font-medium theme-text-secondary mb-1">Balance Factor</label>
+                            <input type="number" id="balanceFactor" min="0" max="1" step="0.05" value="0.75" class="mt-1 block w-full text-sm rounded-md border theme-border theme-bg-primary theme-text-primary focus:ring-indigo-500 focus:border-indigo-500">
+                            <p class="text-xs mt-1 theme-text-secondary">Sensitivity for balance score (0-1).</p>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow">
+                            <i class="fas fa-save mr-2"></i> Update Settings
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Import/Export -->
+                <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                    <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary">
+                        <i class="fas fa-exchange-alt mr-2 theme-highlight"></i> Import / Export
+                    </h2>
+                    <div class="space-y-3">
+                        <div>
+                            <label for="importFile" class="w-full bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center cursor-pointer shadow">
+                                <i class="fas fa-file-import mr-2"></i> Import JSON
+                                <input id="importFile" type="file" accept=".json,application/json" class="hidden">
+                            </label>
+                        </div>
+                        <button id="exportBtn" class="w-full bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow">
+                            <i class="fas fa-file-export mr-2"></i> Export JSON
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Network Actions -->
+                <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                    <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary">
+                        <i class="fas fa-cogs mr-2 theme-highlight"></i> View Actions
+                    </h2>
+                    <div class="space-y-3">
+                        <button id="centerNetworkBtn" class="w-full bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow">
+                            <i class="fas fa-compress-arrows-alt mr-2"></i> Center & Reset Zoom
+                        </button>
+                        <div class="flex space-x-3">
+                            <button id="zoomInBtn" title="Zoom In" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow">
+                                <i class="fas fa-search-plus"></i>
+                            </button>
+                            <button id="zoomOutBtn" title="Zoom Out" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow">
+                                <i class="fas fa-search-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Node Details -->
+                <div id="nodeDetails" class="theme-bg-secondary p-4 rounded-lg shadow border theme-border hidden sticky top-4"> <!-- Sticky for visibility -->
+                    <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary border-b theme-border pb-2">
+                        <i class="fas fa-info-circle mr-2 theme-highlight"></i> Node Details
+                    </h2>
+                    <div id="nodeStats" class="text-sm theme-text-primary space-y-3">
+                        <!-- Node stats loaded by JS -->
+                        <p class="theme-text-secondary italic">Click a node to see details.</p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t theme-border">
+                        <button id="deleteNodeBtn" disabled class="w-full bg-red-500 hover:bg-red-600 disabled:bg-red-300 dark:disabled:bg-red-800 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow">
+                            <i class="fas fa-trash-alt mr-2"></i> Delete Node
+                        </button>
+                         <p class="text-xs text-center mt-1 theme-text-secondary" id="deleteNodeMsg">Select a leaf node to delete.</p>
+                    </div>
+                </div>
+
+            </div> <!-- End Sidebar -->
+
+            <!-- === Network Visualization === -->
+            <div class="col-span-12 lg:col-span-9 theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                <div class="flex flex-wrap justify-between items-start mb-4 gap-y-3">
+                    <h2 class="text-lg font-semibold flex items-center theme-text-primary">
+                        <i class="fas fa-project-diagram mr-2 theme-highlight"></i> Network Visualization
+                    </h2>
+                    <!-- Legends Section -->
+                    <div class="flex flex-wrap gap-x-6 gap-y-3 text-xs theme-text-secondary">
+                        <!-- Ponzi Value Legend -->
+                        <div class="legend-section">
+                            <div class="legend-title theme-text-primary">Node Value</div>
+                             <!-- Using D3 InterpolateBlues -->
+                            <div class="legend-item"> <div class="color-square" style="background-color: #eff3ff;"></div> <span>Low (0.1)</span> </div>
+                            <div class="legend-item"> <div class="color-square" style="background-color: #6baed6;"></div> <span>Medium (0.5)</span> </div>
+                            <div class="legend-item"> <div class="color-square" style="background-color: #08519c;"></div> <span>High (1.0)</span> </div>
+                        </div>
+                        <!-- Chokepoint Legend -->
+                        <div class="legend-section">
+                            <div class="legend-title theme-text-primary">Chokepoint / Criticality</div>
+                             <!-- Using D3 InterpolateOranges -->
+                            <div class="legend-item"> <div class="color-square" style="background-color: #feedde;"></div> <span>Low (0.0)</span> </div>
+                            <div class="legend-item"> <div class="color-square" style="background-color: #fd8d3c;"></div> <span>Medium (0.5)</span> </div>
+                            <div class="legend-item"> <div class="color-square" style="background-color: #a63603;"></div> <span>High (1.0)</span> </div>
+                        </div>
+                         <!-- Add other legends if needed (e.g., Balance via stroke?) -->
+                    </div>
+                </div>
+                <!-- SVG Container -->
+                <div id="network" class="h-[600px] border theme-border rounded-lg overflow-hidden relative bg-gray-50 dark:bg-gray-900">
+                    <!-- SVG injected by D3 -->
+                </div>
+            </div> <!-- End Visualization Area -->
+
+        </div> <!-- End Grid -->
+    </div> <!-- End Container -->
+
+    <!-- Tooltip Element -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <!-- Context Menu Element -->
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" id="ctxViewDetails">
+            <i class="fas fa-info-circle"></i> View Details
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="addNodeNearby">
+            <i class="fas fa-plus-circle"></i> Add Child Node
+        </div>
+        <div class="context-menu-item" id="deleteNodeCtx">
+            <i class="fas fa-trash-alt"></i> Delete Node
+        </div>
+    </div>
+
+    <!-- Add Node Nearby Modal -->
+    <div id="addNodeModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 hidden p-4">
+        <div class="theme-bg-secondary rounded-lg shadow-xl p-6 w-full max-w-md border theme-border">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold theme-text-primary">Add Child Node</h3>
+                <button id="closeModal" class="p-1 rounded-full theme-text-secondary hover:theme-text-primary hover:bg-gray-200 dark:hover:bg-gray-600" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="addNodeNearbyForm" class="space-y-4">
+                <input type="hidden" name="parent_id" id="nearbyParentId">
+                <!-- Removed hidden x, y - not used by backend -->
+                <div>
+                    <label for="nearbyNodeId" class="block text-xs font-medium theme-text-secondary mb-1">Node Name (Optional)</label>
+                    <input type="text" id="nearbyNodeId" name="id" placeholder="Auto-generated if empty" class="mt-1 block w-full text-sm rounded-md border theme-border theme-bg-primary theme-text-primary focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <p class="text-xs theme-text-secondary">This node will be added as a child of '<span id="modalParentNodeId" class="font-semibold"></span>'.</p>
+                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow">
+                    <i class="fas fa-plus mr-2"></i> Add Child Node
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Link to the JavaScript file -->
+    <!-- Ensure the path is correct based on FastAPI's static file mounting -->
+    <script src="/static/js/network.js"></script>
+     <!-- Or use url_for if Jinja2 context is available and preferred -->
+     <!-- <script src="{{ url_for('static', path='/js/network.js') }}"></script> -->
+
+</body>
+</html>
+<!-- END OF FILE index.html -->

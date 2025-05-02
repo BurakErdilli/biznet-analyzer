@@ -1,0 +1,135 @@
+# --- Python ---
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+# Usually these files are written by a CI, but they might be part of testing locally
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# --- Virtual Environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Node.js ---
+# Dependencies
+node_modules/
+# Debug log from npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# Optional lock files (if not needed, keep commented)
+# package-lock.json
+# yarn.lock
+# Build output
+/dist # If you have a JS build step outputting to root /dist
+
+# --- Data Files ---
+# Ignore generated network data and backups in the data/ directory
+data/*.json
+data/*_backup_*.json
+data/*export_*.json
+
+# Ignore specific data files at the root level if they are runtime generated
+network.json
+network_data.json
+
+# --- IDE / Editor ---
+# VS Code
+.vscode/
+# PyCharm
+.idea/
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+# Atom
+.atom/
+# Eclipse
+.project
+.pydevproject
+.settings/
+# Netbeans
+nbproject/
+
+# --- OS Files ---
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Runtime / Logs ---
+*.log
+*.log.*
+logs/
+*.pid
+*.pid.lock
+
+# --- Secrets ---
+# Configuration files containing secrets (often named .env or similar)
+# Add specific secret files here if necessary, e.g., credentials.json
+.env*
+*.env
+!/.env.example # Commonly used to track example structure
+
+# --- Other ---
+# IPython Notebook checkpoints
+.ipynb_checkpoints
+
+# Temporary files
+*.tmp
+*~
+*.swp
+*.swo
