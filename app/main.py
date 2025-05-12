@@ -1,6 +1,4 @@
-# --- START OF FILE main.py ---
-
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Depends
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Depends, Body
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -26,7 +24,7 @@ except ImportError:
 app = FastAPI(
     title="Business Network Analyzer API",
     description="API for managing and visualizing a business network using Cytoscape.js.",
-    version="1.1.0" # Updated version
+    version="1.2.0" # Updated version - Features added/removed
 )
 
 # --- Determine Directories ---
@@ -67,15 +65,19 @@ async def global_exception_handler(request: Request, exc: Exception):
 # --- Frontend Route ---
 @app.get("/", include_in_schema=False)
 def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    # Pass global stats to the template
+    stats = logic.get_global_stats()
+    return templates.TemplateResponse("index.html", {"request": request, "global_stats": stats})
 
 # --- API Routes ---
 @app.get("/api/network", tags=["Network"])
 def api_get_network():
-    """Retrieve the current state of the entire business network."""
+    """Retrieve the current state of the entire business network including global stats."""
     try:
         # Logic module handles potential initialization errors
-        result = logic.get_network()
+        result = logic.get_network() # Contains nodes, graph, settings
+        stats = logic.get_global_stats()
+        result["global_stats"] = stats # Add stats to the response
         return result
     except Exception as e:
         print(f"Error getting network data: {e}")
@@ -83,7 +85,7 @@ def api_get_network():
 
 @app.post("/api/nodes", status_code=201, tags=["Nodes"])
 def api_add_node(data: Dict[str, Any]):
-    """Add a new node. Requires 'parent_id' if network isn't empty. Optional 'id'."""
+    """Add a new node. Requires 'parent_id' if network isn't empty. Optional 'id' and 'value'."""
     result = logic.add_node(data)
     if "error" in result:
         # Use 400 for validation/user errors, 500 if it was unexpected internal
@@ -127,9 +129,59 @@ def api_node_insight(node_id: str):
             raise HTTPException(status_code=400, detail=result["error"])
     return result
 
+# --- NEW: Subtree Import Endpoint ---
+@app.post("/api/nodes/{parent_id}/subtree", status_code=201, tags=["Nodes", "Import/Export"])
+async def api_add_subtree(parent_id: str, file: UploadFile = File(..., description="JSON file for the subtree")):
+    """Add a subtree from a JSON file as children of the specified parent node."""
+    if file.content_type != "application/json":
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a JSON file.")
+
+    try:
+        contents = await file.read()
+        # Basic JSON validation
+        try:
+            subtree_data = json.loads(contents)
+            if not isinstance(subtree_data, dict) or "nodes" not in subtree_data or "graph" not in subtree_data:
+                 raise ValueError("Invalid subtree JSON structure. Must contain 'nodes' and 'graph'.")
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON format: {e}")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        result = logic.add_subtree(parent_id, subtree_data)
+        if "error" in result:
+            error_detail = result["error"].lower()
+            if "parent node" in error_detail and "not found" in error_detail:
+                 raise HTTPException(status_code=404, detail=result["error"])
+            elif "collision" in error_detail or "invalid" in error_detail:
+                 raise HTTPException(status_code=400, detail=result["error"])
+            else: # Unexpected internal errors during add
+                 raise HTTPException(status_code=500, detail=result["error"])
+
+        return result # Returns {"status": "success", "added_nodes": [...]}
+
+    except HTTPException:
+        raise # Re-raise handled HTTP exceptions
+    except Exception as e:
+        print(f"Error adding subtree: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred during subtree import.")
+    finally:
+         if file: await file.close()
+
+# --- NEW: Bulk Delete Endpoint ---
+@app.post("/api/nodes/bulk-delete", status_code=200, tags=["Nodes"])
+def api_bulk_delete_nodes(node_ids: List[str] = Body(..., description="List of node IDs to delete.")):
+    """Delete multiple leaf nodes. Fails if any node has children or doesn't exist."""
+    result = logic.bulk_remove_nodes(node_ids)
+    if "error" in result:
+        # Provide more detail if possible (e.g., which nodes failed)
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result # Returns {"status": "success", "deleted_count": count, "failed_nodes": [...]}
+
+
 @app.get("/api/suggestions", tags=["Analysis"])
 def api_get_suggestions(limit: int = 5):
-    """Get suggested nodes to add children to."""
+    """Get suggested nodes to add children to, ranked by criticality and depth."""
     if limit < 1:
         raise HTTPException(status_code=400, detail="Limit must be at least 1")
     try:
@@ -143,7 +195,7 @@ def api_get_suggestions(limit: int = 5):
 
 @app.post("/api/settings", tags=["Settings"])
 def api_update_settings(data: Dict[str, Any]):
-    """Update network analysis settings."""
+    """Update network analysis settings (Min Children Threshold)."""
     result = logic.update_settings(data)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
@@ -222,6 +274,8 @@ def export_network(background_tasks: BackgroundTasks): # Inject BackgroundTasks
 
         # Get current network data from logic module
         network_data = logic.get_network()
+        # Remove global stats before exporting if they were added
+        network_data.pop("global_stats", None)
 
         # Save network data to the export file
         with open(temp_export_path, 'w') as f:
@@ -258,5 +312,3 @@ if __name__ == "__main__":
 
     print(f"Starting server on http://{host}:{port} with reload={'enabled' if reload_flag else 'disabled'}")
     uvicorn.run("main:app", host=host, port=port, reload=reload_flag)
-
-# --- END OF FILE main.py ---

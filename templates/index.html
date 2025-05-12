@@ -1,11 +1,10 @@
-<!-- START OF FILE index.html -->
 
 <!DOCTYPE html>
 <html lang="en" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Network Analyzer - Draggable</title> <!-- Updated Title -->
+    <title>Business Network Analyzer - Flex Layout</title> <!-- Updated Title -->
     <!-- Tailwind CSS -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <!-- Font Awesome Icons -->
@@ -24,81 +23,131 @@
     <!-- Tippy.js (alternative/complement to popper for simple tooltips) -->
     <script src="https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"></script>
     <style>
-        /* --- Color Scheme & Styles (Same as previous version) --- */
+        /* --- Color Scheme & Styles --- */
         :root {
-            /* General UI */
+            /* ... (Keep all color variables as before) ... */
             --bg-primary: #f8f9fa; --bg-secondary: #ffffff; --bg-tertiary: #e9ecef;
             --text-primary: #212529; --text-secondary: #495057; --text-muted: #6c757d;
             --border-color: #dee2e6; --border-color-strong: #ced4da;
             --highlight: #007bff; --danger: #dc3545; --warning: #ffc107; --success: #28a745;
-            /* Network Specific - Node Background (Value) - Green Scale */
             --node-value-low: #eafaf1; --node-value-med: #74d7a1; --node-value-high: #006d32;
-            /* Network Specific - Node Border (Criticality) - Blue -> Yellow -> Red Heatmap */
             --node-border-low: #0d6efd; --node-border-med: #ffc107; --node-border-high: #dc3545;
-            /* Other Network */
-            --edge-color: #adb5bd; --selected-color: #fd7e14; /* Orange for selection */
+            --edge-color: #adb5bd; --selected-color: #fd7e14;
         }
         .dark {
+             /* ... (Keep all dark theme color variables as before) ... */
             --bg-primary: #212529; --bg-secondary: #343a40; --bg-tertiary: #495057;
             --text-primary: #f8f9fa; --text-secondary: #ced4da; --text-muted: #adb5bd;
             --border-color: #495057; --border-color-strong: #6c757d;
             --highlight: #0d6efd; --danger: #e74c3c; --warning: #f39c12; --success: #1abc9c;
-            /* Dark Theme Network */
             --node-value-low: #004d20; --node-value-med: #28a745; --node-value-high: #abf5d1;
-            /* Border Colors remain the same base for heatmap consistency, maybe adjust lightness */
             --node-border-low: #589bff; --node-border-med: #ffca2c; --node-border-high: #f17c70;
             --edge-color: #6c757d; --selected-color: #fd7e14;
         }
-        /* --- Base & Utility Styles (Same as previous version) --- */
-        body { background-color: var(--bg-primary); color: var(--text-primary); font-family: system-ui, sans-serif; }
+
+        /* --- Base & Utility Styles --- */
+        html { height: 100%; }
+        body {
+            height: 100%; /* Ensure body takes full viewport height */
+            margin: 0;
+            padding: 0;
+            display: flex; /* Use flexbox for overall layout */
+            flex-direction: column; /* Stack children vertically */
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: system-ui, sans-serif;
+        }
+        .main-container {
+            flex-grow: 1; /* Allow the main container to take up remaining vertical space */
+            display: flex; /* Use flex for internal layout too */
+            flex-direction: column;
+            overflow: hidden; /* Prevent content overflow issues */
+             /* padding moved here if needed */
+             padding: 1.5rem 1rem; /* Equivalent to py-6 px-4 */
+        }
+
         .theme-bg-primary { background-color: var(--bg-primary); } .theme-bg-secondary { background-color: var(--bg-secondary); } .theme-bg-tertiary { background-color: var(--bg-tertiary); }
         .theme-text-primary { color: var(--text-primary); } .theme-text-secondary { color: var(--text-secondary); } .theme-text-muted { color: var(--text-muted); }
         .theme-border { border-color: var(--border-color); } .theme-highlight { color: var(--highlight); } .theme-danger { color: var(--danger); } .theme-warning { color: var(--warning); } .theme-success { color: var(--success); }
         input:focus, button:focus, select:focus, textarea:focus { outline: none; border-color: var(--highlight) !important; box-shadow: 0 0 0 2px var(--highlight); }
-        #network { height: 65vh; min-height: 500px; width: 100%; background-color: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.5rem; position: relative; overflow: hidden; cursor: grab; } /* Add grab cursor */
-        #network.grabbing { cursor: grabbing; } /* Cursor when dragging */
+
+        /* --- Grid & Column Styles --- */
+        .main-grid {
+            flex-grow: 1; /* Make the grid container take available space in the flex column */
+            display: grid; /* Use grid for sidebar/main content layout */
+            /* Ensure the grid itself doesn't collapse vertically */
+            min-height: 0; /* Allows grid to shrink if necessary within flex parent */
+        }
+        .sidebar-column {
+             /* Allows sidebar to scroll its own content if it overflows */
+             overflow-y: auto;
+             max-height: 100%; /* Constrain height to prevent pushing layout */
+        }
+        .visualization-column {
+            display: flex; /* Use flexbox to manage vertical space */
+            flex-direction: column;
+            min-height: 0; /* Allows column to shrink */
+             overflow: hidden; /* Prevents children from overflowing this column */
+        }
+
+        /* --- #network Specific Styles --- */
+        #network {
+            flex-grow: 1; /* CRITICAL: Make the network div itself grow */
+            min-height: 450px; /* Fallback minimum height */
+            width: 100%;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            position: relative; /* For loading indicator positioning */
+            overflow: hidden; /* Prevent cytoscape canvas overflow */
+            cursor: grab;
+            display: block; /* Ensure it's a block element */
+        }
+        #network.grabbing { cursor: grabbing; }
+
+        /* --- Other styles (Legends, Suggestions, Modals, Toast, Tooltips, etc.) --- */
+        /* Keep the rest of the styles as before */
         .legend-item { display: flex; align-items: center; margin-bottom: 5px; font-size: 0.8rem; }
         .color-square { width: 12px; height: 12px; margin-right: 6px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.1); } .dark .color-square { border: 1px solid rgba(255,255,255,0.1); }
         .legend-section { margin-bottom: 10px; } .legend-title { font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
         .suggestion-item:hover { transform: translateY(-2px); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08); } .dark .suggestion-item:hover { box-shadow: 0 3px 8px rgba(255, 255, 255, 0.08); }
-        #addNodeModal.hidden, #searchClearBtn.hidden, #isolateSubtreeBtn.hidden, #showAllBtn.hidden { display: none; } /* Updated hidden elements */
+        #addNodeModal.hidden, #searchClearBtn.hidden, #isolateSubtreeBtn.hidden, #showAllBtn.hidden, #bulkDeleteBtn.hidden { display: none; }
         #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: 6px; color: white; font-size: 0.9rem; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         #toast.show { opacity: 1; visibility: visible; }
         #toast.success { background-color: var(--success); } #toast.error { background-color: var(--danger); } #toast.info { background-color: var(--highlight); }
-        /* --- Tooltip & Context Menu Styles (Same as previous version) --- */
         .tippy-box[data-theme~='light-border'] { background-color: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color-strong); box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 0.8rem; padding: 6px 10px; line-height: 1.4; }
         .dark .tippy-box[data-theme~='light-border'] { background-color: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color-strong); }
         .cxtmenu-content { background-color: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 4px; }
         .cxtmenu-item { color: var(--text-primary); transition: background-color 0.1s ease; } .cxtmenu-item:hover { background-color: var(--bg-tertiary); }
         .cxtmenu-item.cxtmenu-disabled { color: var(--text-muted); background-color: transparent; cursor: not-allowed; } .cxtmenu-separator { border-bottom: 1px solid var(--border-color); }
-        /* --- Dimming & Highlighting Styles (Same as previous version) --- */
-         .dimmed { opacity: 0.15 !important; } /* Make dimmed more opaque */
-         .search-match { outline-color: var(--highlight); outline-width: 3px; outline-offset: 3px; outline-style: solid; } /* Use outline for search */
-         /* Optional: Style for node being grabbed */
-         .grabbing { /* outline: 2px dashed var(--selected-color); */ /* Example style */ }
-
+        .dimmed { opacity: 0.15 !important; }
+        .search-match { outline-color: var(--highlight); outline-width: 3px; outline-offset: 3px; outline-style: solid; }
+        .hidden { display: none; } /* Ensure Tailwind hidden works */
+        .grabbing { /* Optional style */ }
     </style>
 </head>
-<body class="theme-bg-primary theme-text-primary min-h-screen text-sm sm:text-base">
-    <div class="container mx-auto px-4 py-6">
-        <header class="mb-6 flex flex-wrap justify-between items-center gap-y-4">
+<body class="theme-bg-primary theme-text-primary text-sm sm:text-base"> <!-- Removed min-h-screen, flex, flex-col from body - relying on height:100% and main-container -->
+
+    <!-- Main Container takes flex control -->
+    <div class="container mx-auto main-container"> <!-- Removed px, py here - added above -->
+        <!-- Header does not grow -->
+        <header class="mb-6 flex flex-wrap justify-between items-center gap-y-4 flex-shrink-0">
+            <!-- Header Content... -->
             <div>
                 <h1 class="text-2xl sm:text-3xl font-bold theme-text-primary">Business Network Analyzer</h1>
                 <p class="text-sm sm:text-base theme-text-secondary">Visualize and analyze network structure</p>
             </div>
             <div class="flex items-center space-x-2 sm:space-x-4">
-                <!-- Search Bar -->
+                <!-- Search, Layout, Theme Toggles -->
                  <div class="relative">
                     <input type="search" id="searchNode" placeholder="Search Node ID..." class="p-2 text-sm rounded-md border theme-border theme-bg-primary theme-text-primary focus:ring-indigo-500 focus:border-indigo-500 pr-8">
                     <button id="searchClearBtn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700 hidden" title="Clear Search">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                <!-- Layout Toggle -->
                 <button id="layoutToggle" class="px-3 py-1.5 text-sm rounded-md bg-indigo-500 hover:bg-indigo-600 text-white transition duration-150 flex items-center shadow">
                     <i class="fas fa-arrow-down mr-2"></i> <span id="layoutToggleText">Vertical Layout</span>
                 </button>
-                <!-- Theme Toggle -->
                 <button id="themeToggle" class="p-2 rounded-full theme-bg-secondary hover:theme-bg-tertiary border theme-border transition-colors duration-150 focus:outline-none">
                     <i id="themeIconMoon" class="fas fa-moon w-4 h-4 theme-text-secondary"></i>
                     <i id="themeIconSun" class="fas fa-sun w-4 h-4 theme-text-secondary hidden"></i>
@@ -106,11 +155,23 @@
             </div>
         </header>
 
-        <div class="grid grid-cols-12 gap-6">
+         <!-- Global Stats Bar does not grow -->
+         <div id="globalStatsBar" class="theme-bg-secondary p-3 rounded-lg shadow border theme-border mb-6 flex flex-wrap justify-around items-center text-xs sm:text-sm theme-text-secondary flex-shrink-0">
+            <!-- Stats Content... -->
+             <span><i class="fas fa-sitemap mr-1 theme-highlight"></i> Nodes: <strong id="statTotalNodes" class="theme-text-primary">0</strong></span>
+             <span><i class="fas fa-project-diagram mr-1 theme-highlight"></i> Edges: <strong id="statTotalEdges" class="theme-text-primary">0</strong></span>
+             <span><i class="fas fa-layer-group mr-1 theme-highlight"></i> Max Depth: <strong id="statMaxDepth" class="theme-text-primary">0</strong></span>
+             <span><i class="fas fa-coins mr-1 theme-success"></i> Total Value: <strong id="statTotalValue" class="theme-text-primary">0</strong></span>
+             <span><i class="fas fa-chart-line mr-1 theme-success"></i> Total Profit: <strong id="statTotalProfit" class="theme-text-primary">0</strong></span>
+         </div>
+
+        <!-- Main Content Grid grows -->
+        <div class="grid grid-cols-12 gap-6 main-grid"> <!-- Added main-grid class -->
             <!-- === Sidebar === -->
-            <div class="col-span-12 lg:col-span-3 space-y-6">
+            <div class="col-span-12 lg:col-span-3 space-y-6 sidebar-column"> <!-- Added sidebar-column class -->
                 <!-- Add Node Form -->
-                <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border flex-shrink-0">
+                     <!-- Form Content... -->
                     <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary"><i class="fas fa-plus-circle mr-2 theme-highlight"></i> Add Node</h2>
                     <form id="addNodeForm" class="space-y-3">
                         <div>
@@ -123,14 +184,16 @@
                         </div>
                          <div>
                             <label for="addNodeValue" class="block text-xs font-medium theme-text-secondary mb-1">Node Value (Optional)</label>
-                            <input type="number" step="any" id="addNodeValue" name="value" placeholder="Default: 1000" class="mt-1 block w-full text-sm rounded-md border theme-border theme-bg-primary theme-text-primary p-2">
+                            <input type="number" step="any" id="addNodeValue" name="value" placeholder="Default: 10000" class="mt-1 block w-full text-sm rounded-md border theme-border theme-bg-primary theme-text-primary p-2">
                         </div>
                         <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow"><i class="fas fa-plus mr-2"></i> Add Node</button>
                     </form>
                 </div>
 
-                <!-- Suggestions Panel -->
-                <div id="suggestionsPanel" class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                <!-- Other Sidebar Panels (Suggestions, Settings, Import/Export, View Actions, Node Details) -->
+                <!-- Add flex-shrink-0 to these panels -->
+                <div id="suggestionsPanel" class="theme-bg-secondary p-4 rounded-lg shadow border theme-border flex-shrink-0">
+                      <!-- Content... -->
                      <div class="flex justify-between items-center mb-3">
                         <h2 class="text-lg font-semibold flex items-center theme-text-primary"><i class="fas fa-lightbulb mr-2 text-yellow-500"></i> Suggestions</h2>
                         <button id="refreshSuggestions" class="p-1 rounded hover:theme-bg-tertiary transition text-xs theme-text-secondary" title="Refresh Suggestions"><i class="fas fa-sync-alt"></i></button>
@@ -140,9 +203,8 @@
                         <p class="text-xs italic theme-text-muted">Loading suggestions...</p>
                     </div>
                 </div>
-
-                <!-- Settings Panel -->
-                 <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                 <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border flex-shrink-0">
+                      <!-- Content... -->
                     <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary"><i class="fas fa-sliders-h mr-2 theme-highlight"></i> Settings</h2>
                     <form id="settingsForm" class="space-y-4">
                         <div>
@@ -157,10 +219,9 @@
                         </div>
                         <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow"><i class="fas fa-save mr-2"></i> Update Settings</button>
                     </form>
-                </div>
-
-                <!-- Import/Export -->
-                <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
+                 </div>
+                <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border flex-shrink-0">
+                     <!-- Content... -->
                      <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary"><i class="fas fa-exchange-alt mr-2 theme-highlight"></i> Import / Export</h2>
                      <div class="space-y-3">
                          <div>
@@ -169,31 +230,28 @@
                              <p class="text-xs mt-1 theme-text-muted text-center">Replaces current network.</p>
                          </div>
                          <button id="exportBtn" class="w-full bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow"><i class="fas fa-file-export mr-2"></i> Export JSON</button>
+                         <input id="importSubtreeFile" type="file" accept=".json,application/json" class="hidden">
                      </div>
-                 </div>
-
-                 <!-- View Actions -->
-                 <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border">
-                     <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary"><i class="fas fa-cogs mr-2 theme-highlight"></i> View Actions</h2>
+                </div>
+                 <div class="theme-bg-secondary p-4 rounded-lg shadow border theme-border flex-shrink-0">
+                      <!-- Content... -->
+                      <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary"><i class="fas fa-cogs mr-2 theme-highlight"></i> View Actions</h2>
                      <div class="space-y-3">
-                         <!-- Center & Zoom -->
                          <button id="centerNetworkBtn" class="w-full bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow"><i class="fas fa-compress-arrows-alt mr-2"></i> Center & Reset Zoom</button>
                          <div class="flex space-x-3">
                              <button id="zoomInBtn" title="Zoom In" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow"><i class="fas fa-search-plus"></i></button>
                              <button id="zoomOutBtn" title="Zoom Out" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow"><i class="fas fa-search-minus"></i></button>
                          </div>
-                         <!-- Layout -->
                           <button id="reapplyLayoutBtn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow"><i class="fas fa-project-diagram mr-2"></i> Re-apply Layout</button>
-                         <!-- Isolate -->
                          <button id="isolateSubtreeBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow hidden"><i class="fas fa-sitemap mr-2"></i> Isolate Subtree</button>
                          <button id="showAllBtn" class="w-full bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow hidden"><i class="fas fa-expand-arrows-alt mr-2"></i> Show Full Network</button>
+                         <button id="bulkDeleteBtn" class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md py-2 px-4 transition duration-150 flex items-center justify-center shadow hidden"><i class="fas fa-trash-alt mr-2"></i> Delete Selected Leaf Nodes</button>
                      </div>
                  </div>
-
-                 <!-- Node Details -->
-                 <div id="nodeDetails" class="theme-bg-secondary p-4 rounded-lg shadow border theme-border hidden sticky top-4">
-                     <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary border-b theme-border pb-2"><i class="fas fa-info-circle mr-2 theme-highlight"></i> Node Details</h2>
-                     <div id="nodeStats" class="text-sm theme-text-primary space-y-1 max-h-[60vh] overflow-y-auto pr-1">
+                 <div id="nodeDetails" class="theme-bg-secondary p-4 rounded-lg shadow border theme-border hidden sticky top-4 flex-shrink-0">
+                     <!-- Content... -->
+                      <h2 class="text-lg font-semibold mb-3 flex items-center theme-text-primary border-b theme-border pb-2"><i class="fas fa-info-circle mr-2 theme-highlight"></i> Node Details</h2>
+                     <div id="nodeStats" class="text-sm theme-text-primary space-y-1 max-h-[40vh] overflow-y-auto pr-1">
                          <p class="theme-text-muted italic">Click a node to see details.</p>
                      </div>
                      <div class="mt-4 pt-3 border-t theme-border">
@@ -204,27 +262,26 @@
 
             </div> <!-- End Sidebar -->
 
-            <!-- === Visualization === -->
-            <div class="col-span-12 lg:col-span-9 theme-bg-secondary p-4 rounded-lg shadow border theme-border">
-                <div class="flex flex-wrap justify-between items-start mb-4 gap-y-3">
+            <!-- === Visualization Column grows === -->
+            <div class="col-span-12 lg:col-span-9 visualization-column"> <!-- Added visualization-column class -->
+                <!-- Visualization Header (Legends etc.) does not grow -->
+                <div class="flex flex-wrap justify-between items-start mb-4 gap-y-3 flex-shrink-0">
                     <h2 class="text-lg font-semibold flex items-center theme-text-primary"><i class="fas fa-project-diagram mr-2 theme-highlight"></i> Network Visualization</h2>
-                     <!-- Legends Section -->
+                    <!-- Legends Section -->
                     <div class="flex flex-wrap gap-x-6 gap-y-3 text-xs theme-text-secondary">
-                        <!-- Node Value (Background) -->
+                         <!-- Legends... -->
                         <div class="legend-section">
                             <div class="legend-title theme-text-primary">Node Value</div>
                             <div class="legend-item"><div class="color-square" style="background-color: var(--node-value-low);"></div><span>Low</span></div>
                             <div class="legend-item"><div class="color-square" style="background-color: var(--node-value-med);"></div><span>Medium</span></div>
                             <div class="legend-item"><div class="color-square" style="background-color: var(--node-value-high);"></div><span>High</span></div>
                         </div>
-                        <!-- Criticality (Border) -->
                         <div class="legend-section">
                             <div class="legend-title theme-text-primary">Criticality (Border)</div>
                             <div class="legend-item"><div class="color-square" style="border: 2px solid var(--node-border-low);"></div><span>Low (OK)</span></div>
                             <div class="legend-item"><div class="color-square" style="border: 2px solid var(--node-border-med);"></div><span>Medium</span></div>
                             <div class="legend-item"><div class="color-square" style="border: 2px solid var(--node-border-high);"></div><span>High (Needs Children)</span></div>
                         </div>
-                        <!-- Node Size (Profit) -->
                         <div class="legend-section">
                              <div class="legend-title theme-text-primary">Node Size (Profit)</div>
                              <div class="legend-item"><span class="text-lg mr-1">●</span> Small</div>
@@ -232,26 +289,29 @@
                          </div>
                     </div>
                 </div>
-                <!-- Cytoscape Container -->
-                <div id="network">
-                    <div id="loadingIndicator" class="absolute inset-0 flex items-center justify-center theme-bg-tertiary bg-opacity-80 z-10" style="display: none;"> <!-- Initially hidden -->
+
+                <!-- Cytoscape Container grows -->
+                <div id="network"> <!-- Removed wrapper, #network now grows -->
+                    <div id="loadingIndicator" class="absolute inset-0 flex items-center justify-center theme-bg-tertiary bg-opacity-80 z-10" style="display: none;">
                         <i class="fas fa-spinner fa-spin text-3xl theme-text-secondary"></i>
                         <span class="ml-3 theme-text-primary">Loading Network...</span>
                     </div>
                 </div>
-            </div> <!-- End Visualization -->
+            </div> <!-- End Visualization Column -->
 
         </div> <!-- End Grid -->
     </div> <!-- End Container -->
 
     <!-- Add Node Modal -->
     <div id="addNodeModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 hidden p-4">
+       <!-- Modal Content... -->
         <div class="theme-bg-secondary rounded-lg shadow-xl p-6 w-full max-w-md border theme-border">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold theme-text-primary">Add Child Node</h3>
                 <button id="closeModal" class="p-1 rounded-full theme-text-muted hover:theme-text-primary hover:theme-bg-tertiary" title="Close"><i class="fas fa-times"></i></button>
             </div>
             <form id="addNodeNearbyForm" class="space-y-4">
+                 <!-- Form fields... -->
                 <input type="hidden" name="parent_id" id="nearbyParentId">
                 <div>
                     <label for="nearbyNodeId" class="block text-xs font-medium theme-text-secondary mb-1">Node Name (Optional)</label>
@@ -273,4 +333,3 @@
     <script src="/static/js/network.js"></script>
 </body>
 </html>
-<!-- END OF FILE index.html -->
